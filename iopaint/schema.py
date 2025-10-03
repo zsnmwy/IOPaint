@@ -280,6 +280,8 @@ class ApiConfig(BaseModel):
     gfpgan_device: Device
     enable_restoreformer: bool
     restoreformer_device: Device
+    enable_ocr: bool = False
+    ocr_device: Device = "cpu"
 
 
 class InpaintRequest(BaseModel):
@@ -509,3 +511,26 @@ class AdjustMaskRequest(BaseModel):
     )
     operate: AdjustMaskOperate = Field(..., description="expand/shrink/reverse")
     kernel_size: int = Field(5, description="Kernel size for expanding mask")
+
+
+class TextRegionBBox(BaseModel):
+    x: int
+    y: int
+    width: int
+    height: int
+
+
+class TextRegion(BaseModel):
+    id: str
+    bbox: TextRegionBBox
+    text: str
+    confidence: float
+
+
+class DetectTextRequest(BaseModel):
+    image: str  # Base64 encoded image
+    languages: List[str] = ['ch_sim', 'en']
+
+
+class DetectTextResponse(BaseModel):
+    text_regions: List[TextRegion]

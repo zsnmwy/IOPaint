@@ -1,5 +1,4 @@
 import base64
-import imghdr
 import io
 import os
 import sys
@@ -298,8 +297,11 @@ def is_mac():
 
 
 def get_image_ext(img_bytes):
-    w = imghdr.what("", img_bytes)
-    if w is None:
+    try:
+        from PIL import Image
+        img = Image.open(io.BytesIO(img_bytes))
+        w = img.format.lower() if img.format else "jpeg"
+    except Exception:
         w = "jpeg"
     return w
 

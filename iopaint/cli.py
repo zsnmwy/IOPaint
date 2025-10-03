@@ -143,6 +143,8 @@ def start(
     gfpgan_device: Device = Option(Device.cpu),
     enable_restoreformer: bool = Option(False),
     restoreformer_device: Device = Option(Device.cpu),
+    enable_ocr: bool = Option(False, help="Enable OCR for text detection"),
+    ocr_device: Device = Option(Device.cpu, help="Device for OCR"),
 ):
     dump_environment_info()
     device = check_device(device)
@@ -224,6 +226,8 @@ def start(
         gfpgan_device=gfpgan_device,
         enable_restoreformer=enable_restoreformer,
         restoreformer_device=restoreformer_device,
+        enable_ocr=enable_ocr,
+        ocr_device=ocr_device,
     )
     print(api_config.model_dump_json(indent=4))
     api = Api(app, api_config)

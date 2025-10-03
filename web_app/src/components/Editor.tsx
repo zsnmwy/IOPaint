@@ -28,6 +28,8 @@ import { PluginName } from "@/lib/types"
 import { useStore } from "@/lib/states"
 import Cropper from "./Cropper"
 import { InteractiveSegPoints } from "./InteractiveSeg"
+import { TextRegionsContainer } from "./TextRegion"
+import { TextDetectionButton, TextDetectionToolbar } from "./TextDetection"
 import useHotKey from "@/hooks/useHotkey"
 import Extender from "./Extender"
 import {
@@ -887,6 +889,8 @@ export default function Editor(props: EditorProps) {
           ) : (
             <></>
           )}
+
+          <TextRegionsContainer />
         </TransformComponent>
       </TransformWrapper>
     )
@@ -1009,7 +1013,13 @@ export default function Editor(props: EditorProps) {
           ) : (
             <></>
           )}
+
+          <TextDetectionButton />
         </div>
+      </div>
+
+      <div className="fixed top-20 left-1/2 -translate-x-1/2 z-10">
+        <TextDetectionToolbar />
       </div>
     </div>
   )

@@ -61,6 +61,8 @@ from iopaint.schema import (
     ModelInfo,
     InteractiveSegModel,
     RealESRGANModel,
+    DetectTextRequest,
+    DetectTextResponse,
 )
 
 CURRENT_DIR = Path(__file__).parent.absolute().resolve()
@@ -171,6 +173,7 @@ class Api:
         self.add_api_route("/api/v1/samplers", self.api_samplers, methods=["GET"])
         self.add_api_route("/api/v1/adjust_mask", self.api_adjust_mask, methods=["POST"])
         self.add_api_route("/api/v1/save_image", self.api_save_image, methods=["POST"])
+        self.add_api_route("/api/v1/detect_text", self.api_detect_text, methods=["POST"], response_model=DetectTextResponse)
         self.app.mount("/", StaticFiles(directory=WEB_APP_DIR, html=True), name="assets")
         # fmt: on
 
@@ -355,6 +358,36 @@ class Api:
         mask = adjust_mask(mask, req.kernel_size, req.operate)
         return Response(content=numpy_to_bytes(mask, "png"), media_type="image/png")
 
+    def api_detect_text(self, req: DetectTextRequest) -> DetectTextResponse:
+        """
+        Detect text regions in the image using OCR
+        """
+        try:
+            # Check if OCR plugin is enabled
+            if "OCR" not in self.plugins:
+                raise HTTPException(
+                    status_code=400,
+                    detail="OCR plugin is not enabled. Please start with --enable-ocr flag"
+                )
+
+            # Decode the base64 image
+            rgb_np_img, _, _, _ = decode_base64_to_image(req.image)
+            logger.info(f"Detecting text in image with shape: {rgb_np_img.shape}")
+
+            # Call OCR plugin to detect text
+            ocr_plugin = self.plugins["OCR"]
+            text_regions = ocr_plugin.detect_text(rgb_np_img)
+
+            logger.info(f"Detected {len(text_regions)} text regions")
+
+            return DetectTextResponse(text_regions=text_regions)
+
+        except HTTPException:
+            raise
+        except Exception as e:
+            logger.error(f"Text detection error: {e}")
+            raise HTTPException(status_code=500, detail=str(e))
+
     def launch(self):
         self.app.include_router(self.router)
         uvicorn.run(
@@ -395,6 +428,8 @@ class Api:
             self.config.enable_restoreformer,
             self.config.restoreformer_device,
             self.config.no_half,
+            self.config.enable_ocr,
+            self.config.ocr_device,
         )
 
     def _build_model_manager(self):

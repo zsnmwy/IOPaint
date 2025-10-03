@@ -8,6 +8,7 @@ from .interactive_seg import InteractiveSeg
 from .realesrgan import RealESRGANUpscaler
 from .remove_bg import RemoveBG
 from .restoreformer import RestoreFormerPlugin
+from .ocr_plugin import OCRPlugin
 from ..schema import InteractiveSegModel, Device, RealESRGANModel
 
 
@@ -27,6 +28,8 @@ def build_plugins(
     enable_restoreformer: bool,
     restoreformer_device: Device,
     no_half: bool,
+    enable_ocr: bool = False,
+    ocr_device: Device = "cpu",
 ) -> Dict:
     plugins = {}
     if enable_interactive_seg:
@@ -72,4 +75,9 @@ def build_plugins(
             restoreformer_device,
             upscaler=plugins.get(RealESRGANUpscaler.name, None),
         )
+
+    if enable_ocr:
+        logger.info(f"Initialize {OCRPlugin.name} plugin on {ocr_device}")
+        plugins[OCRPlugin.name] = OCRPlugin(device=ocr_device)
+
     return plugins

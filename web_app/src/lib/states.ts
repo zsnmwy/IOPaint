@@ -18,6 +18,9 @@ import {
   Size,
   SortBy,
   SortOrder,
+  TextDetectionState,
+  TextRegion,
+  TextRegionBBox,
 } from "./types"
 import {
   BRUSH_COLOR,
@@ -153,6 +156,7 @@ type AppState = {
 
   interactiveSegState: InteractiveSegState
   fileManagerState: FileManagerState
+  textDetectionState: TextDetectionState
 
   cropperState: CropperState
   extenderState: CropperState
@@ -234,6 +238,17 @@ type AppAction = {
 
   adjustMask: (operate: AdjustMaskOperate) => Promise<void>
   clearMask: () => void
+
+  // Text Detection
+  detectText: () => Promise<void>
+  updateTextRegion: (id: string, bbox: Partial<TextRegionBBox>) => void
+  deleteTextRegion: (id: string) => void
+  addTextRegion: () => void
+  clearTextRegions: () => void
+  selectTextRegion: (id: string | null) => void
+  generateTextMask: () => HTMLCanvasElement
+  removeText: () => Promise<void>
+  exitTextDetectionMode: () => void
 }
 
 const defaultValues: AppState = {
@@ -270,6 +285,13 @@ const defaultValues: AppState = {
     isInteractiveSeg: false,
     tmpInteractiveSegMask: null,
     clicks: [],
+  },
+
+  textDetectionState: {
+    isDetecting: false,
+    detectedRegions: [],
+    selectedRegionId: null,
+    isTextDetectionMode: false,
   },
 
   cropperState: {
@@ -1140,6 +1162,162 @@ export const useStore = createWithEqualityFn<AppState & AppAction>()(
         set((state) => {
           state.editorState.extraMasks = []
           state.editorState.curLineGroup = []
+        })
+      },
+
+      // Text Detection Methods
+      detectText: async () => {
+        set((state) => {
+          state.textDetectionState.isDetecting = true
+        })
+
+        try {
+          const file = await get().getCurrentTargetFile()
+          const { detectText } = await import("./api")
+          const textRegions = await detectText(file)
+
+          set((state) => {
+            state.textDetectionState.detectedRegions = textRegions
+            state.textDetectionState.isTextDetectionMode = true
+            state.textDetectionState.isDetecting = false
+          })
+
+          if (textRegions.length === 0) {
+            toast({
+              variant: "default",
+              description: "未检测到文字区域",
+            })
+          } else {
+            toast({
+              variant: "default",
+              description: `检测到 ${textRegions.length} 个文字区域`,
+            })
+          }
+        } catch (e: any) {
+          toast({
+            variant: "destructive",
+            description: e.message || "文字检测失败",
+          })
+          set((state) => {
+            state.textDetectionState.isDetecting = false
+          })
+        }
+      },
+
+      updateTextRegion: (id: string, bbox: Partial<TextRegionBBox>) => {
+        set((state) => {
+          const region = state.textDetectionState.detectedRegions.find(
+            (r) => r.id === id
+          )
+          if (region) {
+            Object.assign(region.bbox, bbox)
+          }
+        })
+      },
+
+      deleteTextRegion: (id: string) => {
+        set((state) => {
+          state.textDetectionState.detectedRegions =
+            state.textDetectionState.detectedRegions.filter((r) => r.id !== id)
+          if (state.textDetectionState.selectedRegionId === id) {
+            state.textDetectionState.selectedRegionId = null
+          }
+        })
+      },
+
+      addTextRegion: () => {
+        const { imageWidth, imageHeight } = get()
+        const newRegion: TextRegion = {
+          id: `manual-${Date.now()}`,
+          bbox: {
+            x: Math.floor(imageWidth / 2 - 100),
+            y: Math.floor(imageHeight / 2 - 50),
+            width: 200,
+            height: 100,
+          },
+          text: "手动添加",
+          confidence: 1.0,
+        }
+
+        set((state) => {
+          state.textDetectionState.detectedRegions.push(newRegion)
+          state.textDetectionState.selectedRegionId = newRegion.id
+        })
+      },
+
+      clearTextRegions: () => {
+        set((state) => {
+          state.textDetectionState.detectedRegions = []
+          state.textDetectionState.selectedRegionId = null
+        })
+      },
+
+      selectTextRegion: (id: string | null) => {
+        set((state) => {
+          state.textDetectionState.selectedRegionId = id
+        })
+      },
+
+      generateTextMask: () => {
+        const { imageWidth, imageHeight, textDetectionState } = get()
+        const maskCanvas = document.createElement("canvas")
+        maskCanvas.width = imageWidth
+        maskCanvas.height = imageHeight
+        const ctx = maskCanvas.getContext("2d")!
+
+        ctx.fillStyle = "white"
+        textDetectionState.detectedRegions.forEach((region) => {
+          const { x, y, width, height } = region.bbox
+          ctx.fillRect(x, y, width, height)
+        })
+
+        return maskCanvas
+      },
+
+      removeText: async () => {
+        const { textDetectionState } = get()
+
+        if (textDetectionState.detectedRegions.length === 0) {
+          toast({
+            variant: "destructive",
+            description: "没有文字区域需要移除",
+          })
+          return
+        }
+
+        try {
+          // Generate mask from text regions
+          const maskCanvas = get().generateTextMask()
+          const maskImage = await canvasToImage(maskCanvas)
+
+          // Set the mask and run inpainting
+          set((state) => {
+            state.editorState.extraMasks = [castDraft(maskImage)]
+          })
+
+          await get().runInpainting()
+
+          // Clear text regions after successful inpainting
+          get().clearTextRegions()
+          get().exitTextDetectionMode()
+
+          toast({
+            variant: "default",
+            description: "文字移除成功",
+          })
+        } catch (e: any) {
+          toast({
+            variant: "destructive",
+            description: e.message || "文字移除失败",
+          })
+        }
+      },
+
+      exitTextDetectionMode: () => {
+        set((state) => {
+          state.textDetectionState.isTextDetectionMode = false
+          state.textDetectionState.detectedRegions = []
+          state.textDetectionState.selectedRegionId = null
         })
       },
     })),

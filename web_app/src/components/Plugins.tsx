@@ -10,6 +10,7 @@ import {
 import { Button } from "./ui/button"
 import {
   Blocks,
+  FileText,
   Fullscreen,
   MousePointerClick,
   Slice,
@@ -25,6 +26,7 @@ export enum PluginName {
   GFPGAN = "GFPGAN",
   RestoreFormer = "RestoreFormer",
   InteractiveSeg = "InteractiveSeg",
+  OCR = "OCR",
 }
 
 // TODO: get plugin config from server and using form-render??
@@ -52,6 +54,10 @@ const pluginMap = {
   [PluginName.InteractiveSeg]: {
     IconClass: MousePointerClick,
     showName: "Interactive Segmentation",
+  },
+  [PluginName.OCR]: {
+    IconClass: FileText,
+    showName: "Text Detection (OCR)",
   },
 }
 

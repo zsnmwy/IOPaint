@@ -5,6 +5,7 @@ import {
   PowerPaintTask,
   Rect,
   ServerConfig,
+  TextRegion,
 } from "@/lib/types"
 import { Settings } from "@/lib/states"
 import { convertToBase64, srcToFile } from "@/lib/utils"
@@ -247,5 +248,27 @@ export async function postAdjustMask(
     const blob = await res.blob()
     return blob
   }
+  throw await throwErrors(res)
+}
+
+export async function detectText(imageFile: File): Promise<TextRegion[]> {
+  const imageBase64 = await convertToBase64(imageFile)
+
+  const res = await fetch(`${API_ENDPOINT}/detect_text`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({
+      image: imageBase64,
+      languages: ["ch_sim", "en"],
+    }),
+  })
+
+  if (res.ok) {
+    const data = await res.json()
+    return data.text_regions
+  }
+
   throw await throwErrors(res)
 }

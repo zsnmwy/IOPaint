@@ -130,3 +130,25 @@ export enum PowerPaintTask {
 }
 
 export type AdjustMaskOperate = "expand" | "shrink" | "reverse"
+
+// Text Detection Types
+export interface TextRegionBBox {
+  x: number
+  y: number
+  width: number
+  height: number
+}
+
+export interface TextRegion {
+  id: string
+  bbox: TextRegionBBox
+  text: string
+  confidence: number
+}
+
+export interface TextDetectionState {
+  isDetecting: boolean
+  detectedRegions: TextRegion[]
+  selectedRegionId: string | null
+  isTextDetectionMode: boolean
+}
