@@ -10,3 +10,7 @@ IOPaint.egg-info/
 venv/
 tmp/
 iopaint/web_app/
+
+# Docker artifacts
+*.tar
+models/

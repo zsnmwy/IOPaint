@@ -1,0 +1,147 @@
+# ============================================
+# Stage 1: 前端构建
+# ============================================
+FROM node:18-alpine AS frontend-builder
+
+WORKDIR /app/web_app
+
+# 复制前端依赖文件（利用缓存）
+COPY web_app/package*.json ./
+
+# 安装依赖
+RUN npm ci
+
+# 复制前端源码
+COPY web_app/ ./
+
+# 构建前端
+RUN npm run build
+
+# ============================================
+# Stage 2: Python 依赖安装
+# ============================================
+FROM python:3.10-slim-bookworm AS python-builder
+
+WORKDIR /app
+
+# 安装系统依赖（仅构建时需要）
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    gcc \
+    g++ \
+    build-essential \
+    && rm -rf /var/lib/apt/lists/*
+
+# 复制 requirements.txt
+COPY requirements.txt ./
+
+# 安装 PyTorch CUDA 版本、xformers 和其他依赖
+RUN pip install --no-cache-dir --user \
+    torch==2.1.2 torchvision==0.16.2 \
+    --index-url https://download.pytorch.org/whl/cu118 && \
+    pip install --no-cache-dir --user \
+    xformers==0.0.23.post1 \
+    --index-url https://download.pytorch.org/whl/cu118 && \
+    pip install --no-cache-dir --user -r requirements.txt
+
+# ============================================
+# Stage 3: 运行时镜像
+# ============================================
+FROM nvidia/cuda:11.8.0-runtime-ubuntu22.04
+
+LABEL maintainer="IOPaint <cwq1913@gmail.com>"
+LABEL org.opencontainers.image.title="IOPaint GPU"
+LABEL org.opencontainers.image.description="Image inpainting tool powered by SOTA AI Model with GPU acceleration"
+LABEL org.opencontainers.image.url="https://github.com/Sanster/IOPaint"
+LABEL org.opencontainers.image.source="https://github.com/Sanster/IOPaint"
+LABEL org.opencontainers.image.documentation="https://www.iopaint.com"
+
+WORKDIR /app
+
+# 安装 Python 3.10 和运行时系统依赖
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    # Python 3.10
+    python3.10 \
+    python3.10-dev \
+    python3-pip \
+    # OpenCV 依赖
+    libsm6 \
+    libxext6 \
+    libxrender1 \
+    libgomp1 \
+    libglib2.0-0 \
+    libgl1-mesa-glx \
+    # FFmpeg（用于视频处理）
+    ffmpeg \
+    # 网络工具（用于健康检查）
+    curl \
+    && rm -rf /var/lib/apt/lists/* \
+    # 创建 python 符号链接
+    && ln -sf /usr/bin/python3.10 /usr/bin/python \
+    && ln -sf /usr/bin/python3.10 /usr/bin/python3
+
+# 从构建阶段复制 Python 包
+COPY --from=python-builder /root/.local /root/.local
+
+# 设置 PATH
+ENV PATH=/root/.local/bin:$PATH
+
+# 复制应用代码
+COPY iopaint/ ./iopaint/
+COPY main.py setup.py README.md requirements.txt ./
+
+# 从前端构建阶段复制构建产物
+COPY --from=frontend-builder /app/web_app/dist ./iopaint/web_app
+
+# 安装应用（使用 editable mode，方便调试）
+RUN pip install --no-cache-dir -e .
+
+# 创建模型和输出目录
+RUN mkdir -p /app/models /app/outputs /app/models/torch/hub/checkpoints /app/models/.EasyOCR
+
+# 预下载模型（lama 和 OCR 模型）
+RUN python -c "import torch; \
+    torch.hub.download_url_to_file( \
+        'https://github.com/Sanster/models/releases/download/add_big_lama/big-lama.pt', \
+        '/app/models/torch/hub/checkpoints/big-lama.pt' \
+    )" && \
+    python -c "import easyocr; \
+    reader = easyocr.Reader(['ch_sim', 'en'], gpu=False, model_storage_directory='/app/models/.EasyOCR', download_enabled=True); \
+    print('OCR models downloaded successfully')"
+
+# 设置环境变量
+ENV PYTHONUNBUFFERED=1 \
+    PYTHONDONTWRITEBYTECODE=1 \
+    MODEL=lama \
+    DEVICE=cuda \
+    HOST=0.0.0.0 \
+    PORT=8080 \
+    EASYOCR_MODEL_DIR=/app/models/.EasyOCR \
+    ENABLE_OCR=true \
+    NVIDIA_VISIBLE_DEVICES=all \
+    NVIDIA_DRIVER_CAPABILITIES=compute,utility
+
+# 暴露端口
+EXPOSE 8080
+
+# 健康检查
+HEALTHCHECK --interval=30s --timeout=10s --start-period=60s --retries=3 \
+    CMD curl -f http://localhost:8080/api/v1/server-config || exit 1
+
+# 启动命令
+CMD if [ "$ENABLE_OCR" = "true" ]; then \
+        python -m iopaint start \
+            --host ${HOST} \
+            --port ${PORT} \
+            --model ${MODEL} \
+            --device ${DEVICE} \
+            --model-dir /app/models \
+            --enable-ocr; \
+    else \
+        python -m iopaint start \
+            --host ${HOST} \
+            --port ${PORT} \
+            --model ${MODEL} \
+            --device ${DEVICE} \
+            --model-dir /app/models; \
+    fi
+

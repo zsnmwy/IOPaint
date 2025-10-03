@@ -1,0 +1,180 @@
+version: '3.8'
+
+services:
+  # ============================================
+  # CPU 版本服务 - 适用于无 GPU 环境
+  # ============================================
+  iopaint-cpu:
+    # 使用预构建的镜像（如需从源码构建，取消注释下面的 build 部分）
+    image: iopaint:cpu-latest
+    # build:
+    #   context: .
+    #   dockerfile: docker/CPUDockerfile.multistage
+    
+    container_name: iopaint-cpu
+    
+    # 端口映射
+    ports:
+      - "8080:8080"
+    
+    # 数据卷挂载
+    # volumes:
+    #   # 模型目录（持久化，避免重复下载）
+    #   - ./models:/app/models
+    #   # 输出目录（持久化用户生成的图片）
+    #   - ./outputs:/app/outputs
+    
+    # 环境变量配置
+    environment:
+      - MODEL=lama                              # 默认模型
+      - DEVICE=cpu                              # 使用 CPU
+      - HOST=0.0.0.0                            # 监听所有网络接口
+      - PORT=8080                               # 服务端口
+      - EASYOCR_MODEL_DIR=/app/models/.EasyOCR  # OCR 模型路径
+      - ENABLE_OCR=true                         # 是否启用 OCR 插件（true/false）
+    
+    # ============================================
+    # 自动重启策略
+    # ============================================
+    # - no: 不自动重启
+    # - always: 总是重启（即使手动停止）
+    # - on-failure: 仅在失败时重启
+    # - unless-stopped: 除非手动停止，否则总是重启（推荐）
+    restart: unless-stopped
+    
+    # ============================================
+    # 日志配置 - 防止日志文件无限增长
+    # ============================================
+    logging:
+      driver: "json-file"
+      options:
+        # 单个日志文件最大大小（10MB）
+        max-size: "10m"
+        # 保留的日志文件数量（3个文件 = 最多 30MB）
+        max-file: "3"
+        # 日志标签（便于日志管理）
+        labels: "service,environment"
+        # 压缩旧日志文件（节省磁盘空间）
+        compress: "true"
+    
+    # ============================================
+    # 健康检查 - 自动检测服务状态
+    # ============================================
+    healthcheck:
+      # 检查命令：访问 API 端点
+      test: ["CMD", "curl", "-f", "http://localhost:8080/api/v1/server-config"]
+      # 检查间隔：每 30 秒检查一次
+      interval: 30s
+      # 超时时间：10 秒内必须响应
+      timeout: 10s
+      # 重试次数：连续失败 3 次才标记为 unhealthy
+      retries: 3
+      # 启动等待期：容器启动后 60 秒才开始健康检查
+      start_period: 60s
+    
+    # ============================================
+    # 资源限制（可选，防止容器占用过多资源）
+    # ============================================
+    # deploy:
+    #   resources:
+    #     limits:
+    #       # CPU 限制：最多使用 4 个 CPU 核心
+    #       cpus: '4.0'
+    #       # 内存限制：最多使用 8GB 内存
+    #       memory: 8G
+    #     reservations:
+    #       # CPU 预留：至少保证 1 个 CPU 核心
+    #       cpus: '1.0'
+    #       # 内存预留：至少保证 2GB 内存
+    #       memory: 2G
+
+  # ============================================
+  # GPU 版本服务 - 适用于有 NVIDIA GPU 环境
+  # ============================================
+  # iopaint-gpu:
+  #   # 使用预构建的镜像（如需从源码构建，取消注释下面的 build 部分）
+  #   image: iopaint:gpu-latest
+  #   # build:
+  #   #   context: .
+  #   #   dockerfile: docker/GPUDockerfile.multistage
+    
+  #   container_name: iopaint-gpu
+    
+  #   # 端口映射（使用不同端口避免冲突）
+  #   ports:
+  #     - "8081:8080"
+    
+  #   # 数据卷挂载
+  #   volumes:
+  #     # 模型目录（持久化，避免重复下载）
+  #     - ./models:/app/models
+  #     # 输出目录（持久化用户生成的图片）
+  #     - ./outputs:/app/outputs
+    
+  #   # 环境变量配置
+  #   environment:
+  #     - MODEL=lama                              # 默认模型
+  #     - DEVICE=cuda                             # 使用 GPU
+  #     - HOST=0.0.0.0                            # 监听所有网络接口
+  #     - PORT=8080                               # 服务端口
+  #     - EASYOCR_MODEL_DIR=/app/models/.EasyOCR  # OCR 模型路径
+  #     - ENABLE_OCR=true                         # 是否启用 OCR 插件（true/false）
+  #     - NVIDIA_VISIBLE_DEVICES=all              # 使用所有可用 GPU
+  #     - NVIDIA_DRIVER_CAPABILITIES=compute,utility  # GPU 驱动能力
+    
+  #   # ============================================
+  #   # 自动重启策略
+  #   # ============================================
+  #   restart: unless-stopped
+    
+  #   # ============================================
+  #   # 日志配置 - 防止日志文件无限增长
+  #   # ============================================
+  #   logging:
+  #     driver: "json-file"
+  #     options:
+  #       # 单个日志文件最大大小（10MB）
+  #       max-size: "10m"
+  #       # 保留的日志文件数量（3个文件 = 最多 30MB）
+  #       max-file: "3"
+  #       # 日志标签（便于日志管理）
+  #       labels: "service,environment"
+  #       # 压缩旧日志文件（节省磁盘空间）
+  #       compress: "true"
+    
+  #   # ============================================
+  #   # GPU 资源配置
+  #   # ============================================
+  #   deploy:
+  #     resources:
+  #       # GPU 资源预留
+  #       reservations:
+  #         devices:
+  #           - driver: nvidia
+  #             count: 1  # 使用 1 个 GPU（可根据需要调整）
+  #             capabilities: [gpu]
+  #         # CPU 预留：至少保证 2 个 CPU 核心
+  #         cpus: '2.0'
+  #         # 内存预留：至少保证 4GB 内存
+  #         memory: 4G
+  #       # 资源限制
+  #       limits:
+  #         # CPU 限制：最多使用 8 个 CPU 核心
+  #         cpus: '8.0'
+  #         # 内存限制：最多使用 16GB 内存
+  #         memory: 16G
+    
+  #   # ============================================
+  #   # 健康检查 - 自动检测服务状态
+  #   # ============================================
+  #   healthcheck:
+  #     # 检查命令：访问 API 端点
+  #     test: ["CMD", "curl", "-f", "http://localhost:8080/api/v1/server-config"]
+  #     # 检查间隔：每 30 秒检查一次
+  #     interval: 30s
+  #     # 超时时间：10 秒内必须响应
+  #     timeout: 10s
+  #     # 重试次数：连续失败 3 次才标记为 unhealthy
+  #     retries: 3
+  #     # 启动等待期：容器启动后 60 秒才开始健康检查
+  #     start_period: 60s

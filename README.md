@@ -105,6 +105,47 @@ When `--mask` is a path to a mask file, all images will be processed using this 
 
 You can see more information about the available models and plugins supported by IOPaint below.
 
+### Docker
+
+IOPaint supports Docker deployment with multi-stage build for optimized image size and build speed.
+
+#### Quick Start with Docker
+
+```bash
+# Build CPU version
+./build_docker_multistage.sh cpu
+
+# Run CPU version
+docker run -p 8080:8080 \
+  -v $(pwd)/models:/app/models \
+  -v $(pwd)/outputs:/app/outputs \
+  iopaint:cpu-latest
+
+# Build GPU version (requires NVIDIA Docker Runtime)
+./build_docker_multistage.sh gpu
+
+# Run GPU version
+docker run --gpus all -p 8080:8080 \
+  -v $(pwd)/models:/app/models \
+  -v $(pwd)/outputs:/app/outputs \
+  iopaint:gpu-latest
+```
+
+#### Using Docker Compose
+
+```bash
+# Start services
+docker-compose -f docker-compose.multistage.yml up -d
+
+# View logs
+docker-compose -f docker-compose.multistage.yml logs -f
+
+# Stop services
+docker-compose -f docker-compose.multistage.yml down
+```
+
+For more details, see [Docker Multi-stage Build Guide](docs/docker-multistage.md).
+
 ## Development
 
 Install [nodejs](https://nodejs.org/en), then install the frontend dependencies.

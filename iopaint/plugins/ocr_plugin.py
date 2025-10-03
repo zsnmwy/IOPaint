@@ -33,9 +33,21 @@ class OCRPlugin(BasePlugin):
         """Initialize EasyOCR reader"""
         try:
             import easyocr
+            import os
             gpu = self.device != "cpu"
+
+            # Use model directory from environment or default to /app/models/.EasyOCR
+            model_storage_dir = os.environ.get('EASYOCR_MODEL_DIR', '/app/models/.EasyOCR')
+
             logger.info(f"Initializing EasyOCR with languages: {self.languages}, GPU: {gpu}")
-            self.reader = easyocr.Reader(self.languages, gpu=gpu)
+            logger.info(f"EasyOCR model storage directory: {model_storage_dir}")
+
+            self.reader = easyocr.Reader(
+                self.languages,
+                gpu=gpu,
+                model_storage_directory=model_storage_dir,
+                download_enabled=True
+            )
             logger.info("EasyOCR initialized successfully")
         except Exception as e:
             logger.error(f"Failed to initialize EasyOCR: {e}")
